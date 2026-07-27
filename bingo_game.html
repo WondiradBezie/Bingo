@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Joy Bingo</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background: #4158D0;
+            background: linear-gradient(135deg, #4158D0 0%, #C850C0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+        }
+
+        .game-container {
+            width: 100%;
+            max-width: 950px;
+            background: white;
+            border-radius: 15px;
+            padding: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            height: 98vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Stats - Single Line */
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, #405DE6, #833AB4);
+            color: white;
+            padding: 10px 12px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            flex-wrap: nowrap;
+            gap: 5px;
+        }
+
+        .stat-block {
+            text-align: center;
+            min-width: 45px;
+        }
+
+        .stat-label {
+            font-size: 9px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+
+        .game-title {
+            font-size: 16px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+
+        /* Card Selection Screen - Use full height */
+        .selection-screen {
+            padding: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .selection-header {
+            background: linear-gradient(135deg, #405DE6, #833AB4);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .selection-title {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .selection-subtitle {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        /* Timer Display */
+        .timer-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .timer-label {
+            font-size: 12px;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .timer-circle {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            color: #ff4444;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .timer-circle.warning {
+            color: #ff8800;
+        }
+
+        .timer-circle.critical {
+            color: #ff0000;
+            animation: pulse-critical 0.5s infinite;
+        }
+
+        .timer-circle.extended {
+            color: #4caf50;
+            animation: pulse-extended 1s infinite;
+        }
+
+        @keyframes pulse-critical {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.12); box-shadow: 0 6px 20px rgba(255,0,0,0.5); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes pulse-extended {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); box-shadow: 0 4px 15px rgba(76,175,80,0.5); }
+            100% { transform: scale(1); }
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            min-height: 0;
+        }
+
+        .card-btn {
+            padding: 12px 2px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            text-align: center;
+            aspect-ratio: 1/1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .card-btn.taken {
+            background: #ffcdd2;
+            border-color: #ef9a9a;
+            color: #b71c1c;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .card-btn.selected {
+            background: #4caf50;
+            color: white;
+            border-color: #2e7d32;
+        }
+
+        .card-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+            background: #f0f0f0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: 14px;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Game Screen - Use full height */
+        #gameScreen {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Spectator Mode */
+        .spectator-banner {
+            background: #ff9800;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .spectator-banner i {
+            font-size: 20px;
+        }
+
+        .player-card.spectator {
+            opacity: 0.7;
+            filter: grayscale(50%);
+        }
+
+        .player-card.spectator .player-cell {
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .player-card.spectator .player-cell:not(.header):hover {
+            transform: none;
+            background: white;
+        }
+
+        /* Main Content - Two Columns with flex growth */
+        .main-content {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Left Side - Number Board */
+        .number-board {
+            flex: 0.9;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 8px;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .board-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            padding: 0 2px;
+            flex-shrink: 0;
+        }
+
+        .board-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .called-badge {
+            background: #ff4444;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .numbers-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .number-column {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            height: 100%;
+        }
+
+        .column-header {
+            text-align: center;
+            font-weight: bold;
+            font-size: 10px;
+            padding: 1px;
+            border-radius: 3px;
+            margin-bottom: 1px;
+            flex-shrink: 0;
+        }
+
+        .column-header.b { background: #ffcdd2; color: #b71c1c; }
+        .column-header.i { background: #fff9c4; color: #f57f17; }
+        .column-header.n { background: #c8e6c9; color: #1b5e20; }
+        .column-header.g { background: #bbdefb; color: #0d47a1; }
+        .column-header.o { background: #e1bee7; color: #4a148c; }
+
+        .number-cell {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 600;
+            background: white;
+            border-radius: 2px;
+            color: #333;
+            border: 1px solid #dee2e6;
+            min-height: 0;
+            padding: 0;
+            margin: 0;
+        }
+
+        .number-cell.called {
+            background: #4caf50 !important;
+            color: white !important;
+            border-color: #2e7d32;
+        }
+
+        /* Right Side Container */
+        .right-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-height: 0;
+        }
+
+        /* Current Call Section */
+        .current-call-section {
+            background: #ff4444;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        .call-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .call-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .call-label {
+            font-size: 12px;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .call-number-big {
+            font-size: 24px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .call-letter-big {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .recent-calls-row {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+            justify-content: flex-end;
+        }
+
+        .recent-ball {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        /* Player Card */
+        .player-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 6px;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            transition: all 0.3s;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+            padding: 0 2px;
+            flex-shrink: 0;
+        }
+
+        .card-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .card-number {
+            background: #833AB4;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .bingo-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            width: 100%;
+        }
+
+        .grid-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 2px;
+            width: 100%;
+        }
+
+        .player-cell {
+            aspect-ratio: 1/1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            background: white;
+            border-radius: 4px;
+            color: #333;
+            border: 1px solid #dee2e6;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .player-cell.header {
+            background: linear-gradient(135deg, #405DE6, #833AB4);
+            color: white;
+            font-size: 14px;
+            font-weight: 700;
+            border: none;
+            cursor: default;
+        }
+
+        .player-cell.marked {
+            background: #4caf50 !important;
+            color: white !important;
+            border-color: #2e7d32;
+        }
+
+        .player-cell.free {
+            background: #ffd700;
+            color: #333;
+            font-weight: 700;
+        }
+
+        .player-cell.free.marked {
+            background: #4caf50 !important;
+            color: white !important;
+        }
+
+        .player-cell.disqualified {
+            opacity: 0.5;
+            pointer-events: none;
+            filter: grayscale(100%);
+        }
+
+        .player-cell.spectator-cell {
+            cursor: default !important;
+            opacity: 0.7;
+        }
+
+        .player-cell.spectator-cell:hover {
+            transform: none;
+        }
+
+        /* Bingo Button */
+        .card-bingo-btn {
+            width: 100%;
+            margin-top: 6px;
+            padding: 8px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .card-bingo-btn:hover:not(:disabled) {
+            background: #ff6666;
+            transform: translateY(-1px);
+        }
+
+        .card-bingo-btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .card-bingo-btn.disabled, .card-bingo-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .cards-grid::-webkit-scrollbar {
+            width: 3px;
+        }
+        
+        .cards-grid::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+
+        .status-banner {
+            background: #ff9800;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .status-banner.disqualified {
+            background: #f44336;
+        }
+
+        .status-banner.warning {
+            background: #ff9800;
+        }
+
+        .status-banner.info {
+            background: #2196f3;
+        }
+
+        .status-banner.success {
+            background: #4caf50;
+        }
+
+        .status-banner.waiting {
+            background: #9c27b0;
+        }
+
+        .next-game-timer {
+            font-size: 18px;
+            font-weight: bold;
+            margin-left: 10px;
+            color: #ffd700;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Card Selection Screen -->
+        <div id="selectionScreen" class="selection-screen">
+            <div class="selection-header">
+                <span class="selection-title">🎮 Joy Bingo</span>
+                <!-- Timer Display in Center -->
+                <div class="timer-container">
+                    <span class="timer-label">Starts in</span>
+                    <div class="timer-circle" id="selectionTimer">20</div>
+                </div>
+                <span class="selection-subtitle">Select Card (1-400)</span>
+            </div>
+            <div id="timerWarning" class="status-banner warning hidden">⏰ Time is running out! Select your card now.</div>
+            <div id="waitingMessage" class="status-banner waiting hidden">⏳ Waiting for more players to join...</div>
+            <div id="playerCountMessage" class="status-banner info hidden">👥 Players selected: <span id="selectedCount">0</span></div>
+            <div class="loading" id="loadingCards">Loading available cards...</div>
+            <div class="cards-grid" id="cardsGrid"></div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="gameScreen" class="hidden">
+            <!-- Top Stats Bar - Single Line -->
+            <div class="stats-row">
+                <div class="game-title">🎮 JOY</div>
+                <div class="stat-block">
+                    <div class="stat-label">DERASH</div>
+                    <div class="stat-value" id="derash">3820</div>
+                </div>
+                <div class="stat-block">
+                    <div class="stat-label">PLAYERS</div>
+                    <div class="stat-value" id="player-count">382</div>
+                </div>
+                <div class="stat-block">
+                    <div class="stat-label">BET</div>
+                    <div class="stat-value" id="bet">10</div>
+                </div>
+                <div class="stat-block">
+                    <div class="stat-label">CALL</div>
+                    <div class="stat-value" id="call-count">0</div>
+                </div>
+                <div class="stat-block">
+                    <div class="stat-label">GAME №</div>
+                    <div class="stat-value" id="game-number">1 of 1</div>
+                </div>
+            </div>
+
+            <!-- Spectator Banner (shown to non-players) -->
+            <div id="spectatorBanner" class="spectator-banner hidden">
+                <i>👁️</i> <span id="spectatorMessage">You are watching this game. Next game starts soon!</span>
+                <span id="nextGameTimer" class="next-game-timer">5</span>
+            </div>
+
+            <!-- Status Banner (for disqualified players) -->
+            <div id="statusBanner" class="status-banner hidden"></div>
+
+            <!-- Main Game Area -->
+            <div class="main-content">
+                <!-- Left Side - Number Board -->
+                <div class="number-board">
+                    <div class="board-header">
+                        <span class="board-title">📋 CALLED NUMBERS</span>
+                        <span class="called-badge" id="called-count">0/75</span>
+                    </div>
+                    <div class="numbers-grid" id="number-board"></div>
+                </div>
+
+                <!-- Right Side - Current Call and Card with Bingo Button INSIDE -->
+                <div class="right-container">
+                    <!-- Current Call Section -->
+                    <div class="current-call-section">
+                        <div class="call-row">
+                            <div class="call-left">
+                                <span class="call-label">CURRENT CALL</span>
+                                <span class="call-letter-big" id="current-letter">-</span>
+                                <span class="call-number-big" id="current-number">-</span>
+                            </div>
+                        </div>
+                        <div class="recent-calls-row" id="recent-calls"></div>
+                    </div>
+
+                    <!-- Player Card -->
+                    <div class="player-card" id="playerCard">
+                        <div class="card-header">
+                            <span class="card-title">🎴 YOUR CARD</span>
+                            <span class="card-number" id="selected-card-num">#0</span>
+                        </div>
+                        <div class="bingo-grid" id="bingo-grid"></div>
+                        
+                        <!-- BINGO BUTTON -->
+                        <button class="card-bingo-btn" id="bingo-btn" onclick="callBingo()">🎯 BINGO!</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.disableVerticalSwipes();
+        
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room') || 'classic';
+        const userId = urlParams.get('user') || tg.initDataUnsafe?.user?.id || 'test';
+        const username = tg.initDataUnsafe?.user?.username || 'Player';
+
+        // Game state
+        let selectedCard = null;
+        let takenCards = [];
+        let calledNumbers = [];
+        let markedNumbers = new Set(['FREE']);
+        let gameActive = false;
+        let currentCard = [];
+        let cardNumber = null;
+        let callCount = 0;
+        let isDisqualified = false;
+        let isSpectator = false;
+        let hasSelectedCard = false;
+        
+        // Timer variables
+        let selectionTimer = 20;
+        let timerInterval = null;
+        let gameStarted = false;
+        let selectionEnded = false;
+        let extensionCount = 0;
+        const MAX_EXTENSIONS = 5; // Maximum number of 20s extensions
+        
+        // Game end variables
+        let gameEnded = false;
+        let nextGameTimer = 5;
+        let nextGameInterval = null;
+
+        // Initialize number board (column-wise)
+        function initNumberBoard() {
+            const board = document.getElementById('number-board');
+            board.innerHTML = '';
+            
+            const columns = ['B', 'I', 'N', 'G', 'O'];
+            const ranges = [
+                {min: 1, max: 15},
+                {min: 16, max: 30},
+                {min: 31, max: 45},
+                {min: 46, max: 60},
+                {min: 61, max: 75}
+            ];
+            
+            for (let col = 0; col < 5; col++) {
+                const columnDiv = document.createElement('div');
+                columnDiv.className = 'number-column';
+                
+                const header = document.createElement('div');
+                header.className = `column-header ${columns[col].toLowerCase()}`;
+                header.textContent = columns[col];
+                columnDiv.appendChild(header);
+                
+                for (let num = ranges[col].min; num <= ranges[col].max; num++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'number-cell';
+                    cell.id = `num-${num}`;
+                    cell.textContent = num;
+                    
+                    if (calledNumbers.includes(num)) {
+                        cell.classList.add('called');
+                    }
+                    
+                    columnDiv.appendChild(cell);
+                }
+                
+                board.appendChild(columnDiv);
+            }
+            
+            document.getElementById('called-count').textContent = `${calledNumbers.length}/75`;
+        }
+
+        // Get selected players count from server
+        async function getSelectedPlayersCount() {
+            try {
+                const response = await fetch(`/api/game/selected_count/${roomId}`);
+                const data = await response.json();
+                return data.count || 0;
+            } catch (e) {
+                console.error('Error getting player count:', e);
+                return 0;
+            }
+        }
+
+        // Update player count display
+        async function updatePlayerCountDisplay() {
+            const count = await getSelectedPlayersCount();
+            const countElement = document.getElementById('selectedCount');
+            if (countElement) {
+                countElement.textContent = count;
+            }
+            
+            // Show/hide player count message
+            const messageElement = document.getElementById('playerCountMessage');
+            if (messageElement) {
+                if (count > 0) {
+                    messageElement.classList.remove('hidden');
+                } else {
+                    messageElement.classList.add('hidden');
+                }
+            }
+            
+            return count;
+        }
+
+        // Check selection status at timer end
+        async function checkTimerEnd() {
+            const selectedCount = await getSelectedPlayersCount();
+            
+            // Update display
+            document.getElementById('selectedCount').textContent = selectedCount;
+            
+            if (selectedCount >= 2) {
+                // 2+ players - start game
+                const warning = document.getElementById('timerWarning');
+                warning.textContent = '✅ Enough players! Starting game...';
+                warning.classList.add('success');
+                warning.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    startGameAfterTimer();
+                }, 1000);
+                return true;
+            } 
+            else if (selectedCount === 1) {
+                // 1 player - extend timer by 20 seconds
+                extensionCount++;
+                
+                if (extensionCount <= MAX_EXTENSIONS) {
+                    selectionTimer = 20;
+                    
+                    const waitingMsg = document.getElementById('waitingMessage');
+                    waitingMsg.textContent = `⏳ Only 1 player selected. Waiting ${selectionTimer}s for more players... (Attempt ${extensionCount}/${MAX_EXTENSIONS})`;
+                    waitingMsg.classList.remove('hidden');
+                    
+                    const timerElement = document.getElementById('selectionTimer');
+                    timerElement.classList.add('extended');
+                    
+                    // Continue countdown
+                    startCountdown();
+                    return false;
+                } else {
+                    // Max extensions reached - start game with 1 player
+                    const warning = document.getElementById('timerWarning');
+                    warning.textContent = '⏰ Max wait time reached. Starting game with 1 player...';
+                    warning.classList.remove('hidden');
+                    
+                    setTimeout(() => {
+                        startGameAfterTimer();
+                    }, 1000);
+                    return true;
+                }
+            } 
+            else {
+                // 0 players - stay on selection board, keep timer at 0 but don't start game
+                const waitingMsg = document.getElementById('waitingMessage');
+                waitingMsg.textContent = '👥 No players selected. Waiting for players to join...';
+                waitingMsg.classList.remove('hidden');
+                
+                // Reset timer to 20 but don't start countdown automatically
+                selectionTimer = 20;
+                const timerElement = document.getElementById('selectionTimer');
+                timerElement.textContent = '20';
+                timerElement.classList.remove('extended', 'critical', 'warning');
+                
+                // Don't start game, just wait
+                return false;
+            }
+        }
+
+        // Start countdown
+        function startCountdown() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(async () => {
+                selectionTimer--;
+                updateTimerDisplay();
+                
+                // Show warning at 5 seconds
+                if (selectionTimer === 5) {
+                    const warning = document.getElementById('timerWarning');
+                    warning.textContent = '⏰ Time is running out! Select your card now.';
+                    warning.classList.remove('hidden', 'success');
+                }
+                
+                if (selectionTimer <= 0) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                    
+                    // Check what to do at timer end
+                    await checkTimerEnd();
+                }
+            }, 1000);
+        }
+
+        // Start selection timer
+        function startSelectionTimer() {
+            // Initial player count display
+            updatePlayerCountDisplay();
+            
+            // Start periodic player count updates
+            setInterval(updatePlayerCountDisplay, 2000);
+            
+            selectionTimer = 20;
+            extensionCount = 0;
+            updateTimerDisplay();
+            
+            startCountdown();
+        }
+        
+        function updateTimerDisplay() {
+            const timerElement = document.getElementById('selectionTimer');
+            if (timerElement && !gameStarted) {
+                timerElement.textContent = selectionTimer;
+                
+                if (selectionTimer <= 5) {
+                    timerElement.className = 'timer-circle critical';
+                } else if (selectionTimer <= 10) {
+                    timerElement.className = 'timer-circle warning';
+                } else if (timerElement.classList.contains('extended')) {
+                    // Keep extended class
+                } else {
+                    timerElement.className = 'timer-circle';
+                }
+            }
+        }
+        
+        function startGameAfterTimer() {
+            if (!gameStarted) {
+                gameStarted = true;
+                
+                // Hide all selection screen messages
+                document.getElementById('timerWarning').classList.add('hidden');
+                document.getElementById('waitingMessage').classList.add('hidden');
+                document.getElementById('playerCountMessage').classList.add('hidden');
+                
+                // Determine if current user is a player or spectator
+                if (hasSelectedCard) {
+                    gameActive = true;
+                    isSpectator = false;
+                } else {
+                    gameActive = false;
+                    isSpectator = true;
+                    
+                    // Show spectator banner
+                    const spectatorBanner = document.getElementById('spectatorBanner');
+                    spectatorBanner.classList.remove('hidden');
+                    
+                    // Make card non-interactive
+                    document.getElementById('playerCard').classList.add('spectator');
+                    document.getElementById('bingo-btn').disabled = true;
+                }
+                
+                document.getElementById('selectionScreen').style.display = 'none';
+                document.getElementById('gameScreen').classList.remove('hidden');
+                
+                initNumberBoard();
+                renderBingoCard();
+                updateCurrentCall();
+                startGame();
+            }
+        }
+
+        function renderBingoCard() {
+            const grid = document.getElementById('bingo-grid');
+            grid.innerHTML = '';
+            
+            const headerRow = document.createElement('div');
+            headerRow.className = 'grid-row';
+            ['B', 'I', 'N', 'G', 'O'].forEach(letter => {
+                const cell = document.createElement('div');
+                cell.className = 'player-cell header';
+                cell.textContent = letter;
+                headerRow.appendChild(cell);
+            });
+            grid.appendChild(headerRow);
+            
+            if (currentCard && currentCard.length === 25) {
+                const card2D = [];
+                for (let row = 0; row < 5; row++) {
+                    card2D[row] = [];
+                    for (let col = 0; col < 5; col++) {
+                        const index = row * 5 + col;
+                        card2D[row][col] = currentCard[index];
+                    }
+                }
+                
+                for (let row = 0; row < 5; row++) {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'grid-row';
+                    
+                    for (let col = 0; col < 5; col++) {
+                        const index = row * 5 + col;
+                        const isFreeSpace = (row === 2 && col === 2);
+                        
+                        const cell = document.createElement('div');
+                        cell.className = 'player-cell';
+                        
+                        if (isFreeSpace) {
+                            cell.textContent = '⭐';
+                            cell.classList.add('free');
+                            if (markedNumbers.has('FREE')) {
+                                cell.classList.add('marked');
+                            }
+                        } else {
+                            const num = card2D[row][col];
+                            cell.textContent = num;
+                            
+                            // Only add click handler if player is active
+                            if (!isSpectator && !isDisqualified) {
+                                cell.onclick = function() {
+                                    if (!gameActive || isDisqualified) return;
+                                    
+                                    if (this.classList.contains('marked')) {
+                                        this.classList.remove('marked');
+                                        markedNumbers.delete(num);
+                                    } else {
+                                        this.classList.add('marked');
+                                        markedNumbers.add(num);
+                                    }
+                                };
+                            } else {
+                                cell.classList.add('spectator-cell');
+                            }
+                            
+                            if (markedNumbers.has(num)) {
+                                cell.classList.add('marked');
+                            }
+                        }
+                        
+                        if (isDisqualified) {
+                            cell.classList.add('disqualified');
+                        }
+                        
+                        rowDiv.appendChild(cell);
+                    }
+                    
+                    grid.appendChild(rowDiv);
+                }
+            }
+        }
+
+        async function callBingo() {
+            if (!gameActive || isDisqualified || isSpectator) return;
+            
+            try {
+                const response = await fetch('/api/game/check_bingo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        room_id: roomId,
+                        marked: Array.from(markedNumbers)
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'disqualified') {
+                    isDisqualified = true;
+                    
+                    const banner = document.getElementById('statusBanner');
+                    banner.textContent = '❌ Wrong BINGO! You are disqualified for this game.';
+                    banner.classList.add('disqualified');
+                    banner.classList.remove('hidden');
+                    
+                    document.querySelectorAll('.player-cell').forEach(cell => {
+                        cell.classList.add('disqualified');
+                    });
+                    
+                    document.getElementById('bingo-btn').classList.add('disabled');
+                    
+                } else if (result.status === 'win') {
+                    alert(`🎉 BINGO! You win ${result.prize} Birr! 🎉`);
+                    gameActive = false;
+                    
+                } else if (result.status === 'blocked') {
+                    alert('You are already disqualified from this game.');
+                }
+                
+            } catch (error) {
+                console.error('Error calling bingo:', error);
+            }
+        }
+
+        // Check if game has ended (all numbers called or winner)
+        function checkGameEnded() {
+            if (calledNumbers.length >= 75 && !gameEnded) {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            if (gameEnded) return;
+            gameEnded = true;
+            gameActive = false;
+            
+            // Show end game message
+            const banner = document.getElementById('statusBanner');
+            banner.textContent = '🏁 Game ended! Next game starting soon...';
+            banner.classList.add('info');
+            banner.classList.remove('hidden');
+            
+            // Start countdown to next game
+            nextGameTimer = 5;
+            const timerElement = document.getElementById('nextGameTimer');
+            
+            nextGameInterval = setInterval(() => {
+                nextGameTimer--;
+                if (timerElement) {
+                    timerElement.textContent = nextGameTimer;
+                }
+                
+                if (nextGameTimer <= 0) {
+                    clearInterval(nextGameInterval);
+                    // Redirect back to lobby for new game
+                    window.location.href = '/webapp/lobby.html';
+                }
+            }, 1000);
+        }
+
+        function generateDemoCard(cardNum) {
+            const card = new Array(25).fill(0);
+            
+            for (let col = 0; col < 5; col++) {
+                const min = col * 15 + 1;
+                const max = min + 14;
+                const numbers = [];
+                
+                while (numbers.length < 5) {
+                    const num = Math.floor(Math.random() * 15) + min;
+                    if (!numbers.includes(num)) {
+                        numbers.push(num);
+                    }
+                }
+                numbers.sort((a, b) => a - b);
+                
+                for (let row = 0; row < 5; row++) {
+                    const index = row * 5 + col;
+                    card[index] = numbers[row];
+                }
+            }
+            
+            return card;
+        }
+
+        async function loadCards() {
+            try {
+                let takenCardsData = [];
+                const response = await fetch(`/api/game/taken_cards/${roomId}`);
+                if (!response.ok) throw new Error('Could not load card availability');
+                const data = await response.json();
+                takenCardsData = data.taken_cards || [];
+                
+                takenCards = takenCardsData;
+                
+                const grid = document.getElementById('cardsGrid');
+                grid.innerHTML = '';
+                document.getElementById('loadingCards').style.display = 'none';
+                
+                for (let i = 1; i <= 400; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = 'card-btn';
+                    btn.textContent = i;
+                    btn.dataset.cardNum = i;
+                    
+                    if (takenCards.includes(i.toString())) {
+                        btn.classList.add('taken');
+                        btn.disabled = true;
+                    }
+                    
+                    btn.onclick = () => selectCard(i);
+                    grid.appendChild(btn);
+                }
+                
+                // Start the selection timer
+                startSelectionTimer();
+                
+            } catch (error) {
+                console.error('Error loading cards:', error);
+            }
+        }
+
+        async function selectCard(cardNum) {
+            if (gameStarted) {
+                alert('Game has already started!');
+                return;
+            }
+            
+            if (takenCards.includes(cardNum.toString())) {
+                alert('This card is already taken!');
+                return;
+            }
+            
+            selectedCard = cardNum;
+            hasSelectedCard = true;
+            
+            document.querySelectorAll('.card-btn').forEach(btn => {
+                btn.classList.remove('selected');
+                if (btn.dataset.cardNum == cardNum) {
+                    btn.classList.add('selected');
+                }
+            });
+            
+            try {
+                let cardData = null;
+                try {
+                    const response = await fetch('/api/game/select_card', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            user_id: userId,
+                            room_id: roomId,
+                            card_number: cardNum,
+                            username: username
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success) {
+                            cardData = result.game_state.card;
+                        }
+                    }
+                } catch (e) {
+                    throw new Error('Could not reserve this card. Please try again.');
+                }
+                if (!cardData) {
+                    throw new Error('Server did not return the selected card.');
+                }
+                
+                currentCard = cardData;
+                cardNumber = cardNum;
+                
+                document.getElementById('selected-card-num').textContent = `#${cardNum}`;
+                
+                // Update player count after selection
+                await updatePlayerCountDisplay();
+                
+            } catch (error) {
+                console.error('Error selecting card:', error);
+            }
+        }
+
+        function updateCurrentCall() {
+            if (calledNumbers.length === 0) {
+                document.getElementById('current-letter').textContent = '-';
+                document.getElementById('current-number').textContent = '-';
+                document.getElementById('recent-calls').innerHTML = '';
+                return;
+            }
+            
+            const currentNum = calledNumbers[calledNumbers.length - 1];
+            let letter = '';
+            if (currentNum <= 15) letter = 'B';
+            else if (currentNum <= 30) letter = 'I';
+            else if (currentNum <= 45) letter = 'N';
+            else if (currentNum <= 60) letter = 'G';
+            else letter = 'O';
+            
+            document.getElementById('current-letter').textContent = letter;
+            document.getElementById('current-number').textContent = currentNum;
+            
+            const recent = document.getElementById('recent-calls');
+            recent.innerHTML = '';
+            calledNumbers.slice(-3).forEach(n => {
+                const ball = document.createElement('div');
+                ball.className = 'recent-ball';
+                ball.textContent = n;
+                recent.appendChild(ball);
+            });
+        }
+
+        function addCalledNumber(num) {
+            if (!calledNumbers.includes(num)) {
+                calledNumbers.push(num);
+                callCount = calledNumbers.length;
+                
+                const cell = document.getElementById(`num-${num}`);
+                if (cell) cell.classList.add('called');
+                
+                document.getElementById('called-count').textContent = `${calledNumbers.length}/75`;
+                document.getElementById('call-count').textContent = callCount;
+                updateCurrentCall();
+                
+                // Check if game should end
+                checkGameEnded();
+            }
+        }
+
+        function startGame() {
+            // Update stats
+            setInterval(() => {
+                const players = 382;
+                document.getElementById('player-count').textContent = players;
+                document.getElementById('derash').textContent = players * 10;
+            }, 2000);
+            
+            // Simulate number calls
+            const gameInterval = setInterval(() => {
+                if (!gameActive && !isSpectator) return;
+                
+                if (calledNumbers.length < 75) {
+                    let num;
+                    do {
+                        num = Math.floor(Math.random() * 75) + 1;
+                    } while (calledNumbers.includes(num));
+                    
+                    addCalledNumber(num);
+                }
+            }, 3000);
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCards);
+    </script>
+</body>
+</html>

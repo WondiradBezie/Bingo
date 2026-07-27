@@ -1,0 +1,4 @@
+{
+  "test_game_service.py::test_catalog_has_400_valid_cards": true,
+  "test_game_service.py::test_line_bingo_and_single_settlement": true
+}
