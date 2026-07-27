@@ -1,0 +1,420 @@
+JOY BINGO — COMPLETE PRODUCTION RUNBOOK
+=======================================
+
+This document explains how to install, configure, test, deploy, operate, and troubleshoot the production-hardened JOY BINGO build.
+
+IMPORTANT LEGAL / BUSINESS NOTE
+--------------------------------
+This software handles real-money game balances. Before public launch, independently verify Ethiopian gambling/gaming law, licensing, taxes, consumer protection, payment-provider requirements, and responsible-gaming obligations. Technical readiness does not mean legal authorization to operate.
+
+1. PROJECT STRUCTURE
+--------------------
+free_deploy.py       Telegram webhook + FastAPI + WebSocket + admin API
+game_service.py      Authoritative Bingo engine and winner logic
+database.py          PostgreSQL schema, wallet, transactions, deposits, withdrawals
+cards.json           Exactly 400 validated Bingo cards
+webapp/              Player and admin web interfaces
+Dockerfile            Container image
+Docker-compose.yaml  Local PostgreSQL + Redis + app stack
+koyeb.yaml            Koyeb starting configuration
+.env.example         Environment variable template
+ARCHITECTURE.md      Architecture and money-flow explanation
+tests/               Automated game-engine tests
+
+2. REQUIREMENTS
+---------------
+Recommended:
+- Python 3.11 or newer
+- PostgreSQL 15+
+- Redis 7+
+- Telegram bot created with BotFather
+- Public HTTPS URL for the web app/webhook in production
+
+3. ENVIRONMENT VARIABLES
+------------------------
+BOT_TOKEN
+  Telegram BotFather token. Never commit it.
+
+DATABASE_URL
+  PostgreSQL connection string, for example:
+  postgresql://bingo:YOUR_PASSWORD@HOST:5432/bingo
+
+REDIS_URL
+  Redis connection string. The current authoritative game engine does not require Redis for correctness, but it is kept as infrastructure for future caching/scaling.
+
+WEBAPP_URL
+  Public base URL where the web app is hosted, for example:
+  https://your-domain.example
+
+PORT
+  HTTP port. Usually 8000 locally/Koyeb.
+
+ADMIN_IDS
+  Comma-separated Telegram numeric IDs of administrators.
+  Example: 123456789,987654321
+
+ADMIN_SECRET_KEY
+  Long random secret used by the admin API bearer token. Generate a unique value; do not reuse passwords.
+
+ADMIN_PASSWORD
+  Strong administrator password. There is no hard-coded fallback password.
+
+ALLOWED_ORIGINS
+  Comma-separated browser origins allowed to call the API. In production set this to your exact web app origin.
+
+POSTGRES_PASSWORD
+  Used only by docker-compose local PostgreSQL.
+
+4. LOCAL INSTALLATION — WINDOWS
+--------------------------------
+A. Install Python 3.11+ and PostgreSQL 15+.
+B. Install Redis 7+ or use Docker for Redis.
+C. Open PowerShell in the project folder.
+D. Create a virtual environment:
+
+  py -3.11 -m venv .venv
+  .venv\Scripts\Activate.ps1
+
+E. Install dependencies:
+
+  pip install -r requirements-free.txt
+
+F. Copy the environment template:
+
+  copy .env.example .env
+
+G. Edit .env and set every required value.
+H. Create a PostgreSQL database named bingo and a database user with a strong password.
+I. Start the app:
+
+  uvicorn free_deploy:app --host 0.0.0.0 --port 8000
+
+J. Open:
+
+  http://localhost:8000/webapp/lobby.html
+
+5. LOCAL INSTALLATION — UBUNTU / LINUX
+---------------------------------------
+Install packages:
+
+  sudo apt update
+  sudo apt install -y python3 python3-venv postgresql redis-server
+
+Create the environment:
+
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements-free.txt
+
+Copy and edit configuration:
+
+  cp .env.example .env
+  nano .env
+
+Start the application:
+
+  uvicorn free_deploy:app --host 0.0.0.0 --port 8000
+
+6. DOCKER QUICK START
+---------------------
+Copy .env.example to .env and set all values.
+Then run:
+
+  docker compose up -d --build
+
+Check:
+
+  docker compose ps
+  docker compose logs -f app
+
+Stop:
+
+  docker compose down
+
+The database volume is persistent. Do not use `docker compose down -v` unless you intentionally want to destroy the local database.
+
+7. DATABASE INITIALIZATION
+--------------------------
+The application creates required tables automatically at startup.
+The schema includes:
+- users
+- transactions
+- games
+- game_players
+- deposit_requests
+- withdrawal_requests
+- audit_logs
+
+The application also performs safe additive migrations for newer columns.
+
+For production, take regular PostgreSQL backups. Automatic table creation is not a substitute for backups or a proper migration/backup strategy.
+
+8. TELEGRAM BOT SETUP
+---------------------
+A. Create the bot using Telegram BotFather.
+B. Put BOT_TOKEN in the environment.
+C. Put your Telegram numeric account ID in ADMIN_IDS.
+D. Set WEBAPP_URL to the HTTPS URL of the deployed application.
+E. Configure the Telegram webhook to:
+
+  https://YOUR_DOMAIN/api/webhook
+
+The exact webhook configuration can be done with Telegram's Bot API or your preferred deployment tooling.
+
+9. PLAYER GAME FLOW
+-------------------
+1. User registers and receives the configured starting bonus (currently 20 Birr).
+2. User opens the Bingo web app.
+3. Server checks account status and balance.
+4. User selects one of the 400 cards.
+5. Server atomically reserves the card price (10 Birr for Classic/Line).
+6. Card selection is stored in PostgreSQL.
+7. After the selection period, the server starts the game when the minimum player count is reached.
+8. Server controls the number sequence.
+9. Player can only mark numbers already called and present on their card.
+10. Server detects winning patterns from called numbers, not from client claims.
+11. If multiple players become winners on the same called number, the prize pool is split between them.
+12. Winner payout uses a unique transaction reference and is therefore idempotent.
+
+10. CURRENT GAME RULES
+----------------------
+Classic room:
+- Card price: 10 Birr
+- Prize pool: 80% of bets
+- Platform commission: 20%
+- Maximum players: 400
+- Minimum players: 2
+- Winning pattern: any row, column, or diagonal
+- Center square is free/automatically marked
+
+Other rooms are configured in free_deploy.py:
+- Blackout: 20 Birr
+- Four Corners: 12 Birr
+- Line: 10 Birr
+
+Do not change financial rules in the browser. Change server configuration/code and test them before deployment.
+
+11. PAYMENT / DEPOSIT FLOW
+--------------------------
+A player does NOT receive balance merely by typing a transaction ID.
+
+Correct flow:
+1. Player sends payment externally.
+2. Player submits transaction ID, amount, and method.
+3. Server creates a pending deposit request.
+4. Admin verifies the external payment.
+5. Admin approves the request.
+6. Only then is balance credited.
+7. The external reference is unique, preventing duplicate approval.
+
+Admin API endpoints:
+GET  /api/admin/deposits
+POST /api/admin/deposits/{id}/approve
+POST /api/admin/deposits/{id}/reject
+
+12. WITHDRAWAL FLOW
+-------------------
+1. Player submits amount and payment details.
+2. Server locks the user's row and reserves the amount.
+3. A pending withdrawal request is created.
+4. Admin approves or rejects it.
+5. Approval finalizes the request.
+6. Rejection refunds the reserved balance exactly once.
+
+Admin API endpoints:
+GET  /api/admin/withdrawals
+POST /api/admin/withdrawals/{id}/approve
+POST /api/admin/withdrawals/{id}/reject
+
+Minimum withdrawal: 50 Birr.
+
+13. ADMIN AUTHENTICATION
+------------------------
+Admin login requires BOTH:
+- Telegram numeric ID included in ADMIN_IDS
+- ADMIN_PASSWORD
+
+The API then returns ADMIN_SECRET_KEY as the bearer token.
+
+Send it as:
+  Authorization: Bearer YOUR_ADMIN_SECRET_KEY
+
+Never put the secret key in frontend source code or commit it to GitHub.
+
+14. SECURITY RULES
+------------------
+- Never commit .env.
+- Never publish BOT_TOKEN.
+- Never put database passwords in source code.
+- Use HTTPS in production.
+- Set ALLOWED_ORIGINS to the real web app origin, not `*`.
+- Keep PostgreSQL private; do not expose port 5432 publicly.
+- Keep Redis private; do not expose port 6379 publicly.
+- Use a strong ADMIN_SECRET_KEY.
+- Use a strong ADMIN_PASSWORD.
+- Back up PostgreSQL before upgrading the application.
+
+15. TESTING
+-----------
+Run:
+
+  python -m py_compile *.py
+  pytest -q
+
+The included automated tests validate:
+- Exactly 400 cards exist.
+- Card structure and column ranges are valid.
+- Server-side line Bingo logic works.
+- Wallet reservation happens before game entry.
+- Winner payout is calculated from the prize pool.
+- Game settlement does not repeat through the same game object.
+
+16. MANUAL PAYMENT TEST
+-----------------------
+Use a test database/account first.
+
+Deposit:
+- Submit a fake external reference.
+- Confirm it appears as pending.
+- Confirm balance does NOT change before approval.
+- Approve it.
+- Confirm balance increases once.
+- Attempt to submit the same reference again; it must be rejected.
+
+Withdrawal:
+- Request a withdrawal larger than balance; it must fail.
+- Request a valid withdrawal; balance is reserved.
+- Reject it; balance must be restored.
+- Submit another request and approve it; total withdrawal statistics must update.
+
+17. GAME TEST
+-------------
+Use test users with enough balance.
+
+- Join with card 1.
+- Join with card 2.
+- Try to select the same card twice; second attempt must fail.
+- Try to join with insufficient balance; it must fail and no money is deducted.
+- Try to mark an uncalled number; it must fail.
+- Try to mark a number not on the card; it must fail.
+- Complete a valid row/column/diagonal.
+- Confirm the server finishes the game.
+- Confirm winner payout is exactly 80% of total bets.
+- Confirm no second payout occurs.
+
+18. RESTART / RECOVERY TEST
+---------------------------
+1. Start a test game with at least two players.
+2. Allow several numbers to be called.
+3. Restart the app.
+4. Confirm the game is reconstructed from PostgreSQL.
+5. Confirm called numbers and player cards remain intact.
+6. Confirm the number sequence continues from the saved count.
+7. Confirm any pending winner payouts are retried on startup.
+
+19. Koyeb DEPLOYMENT
+--------------------
+Recommended approach:
+A. Push the project to GitHub.
+B. Create a Koyeb Web Service from the repository.
+C. Use the included Dockerfile, or build command:
+
+  pip install --no-cache-dir -r requirements-free.txt
+
+D. Run command:
+
+  uvicorn free_deploy:app --host 0.0.0.0 --port $PORT
+
+E. Add all environment variables listed in section 3.
+F. Use managed PostgreSQL and Redis or another private production provider.
+G. Do not put database credentials into koyeb.yaml.
+H. Deploy.
+I. Check `/health` and `/test-db`.
+J. Configure the Telegram webhook to `/api/webhook`.
+
+20. HEALTH CHECKS
+-----------------
+GET /
+GET /health
+GET /ping
+GET /test-db
+
+`/test-db` should only be exposed to trusted operators in a hardened production setup because it reports database diagnostic information.
+
+21. TROUBLESHOOTING
+-------------------
+"DATABASE_URL is required"
+  Set DATABASE_URL and restart.
+
+"Admin authentication is not configured"
+  Set ADMIN_IDS, ADMIN_SECRET_KEY, and ADMIN_PASSWORD.
+
+Bot does not respond
+  Check BOT_TOKEN, webhook URL, application logs, and Telegram webhook status.
+
+Card selection fails
+  Check PostgreSQL connectivity and inspect application logs. Confirm the user is registered and has at least the card price in balance.
+
+Deposit does not immediately increase balance
+  This is intentional. Deposits remain pending until an admin verifies the external payment.
+
+Withdrawal rejected
+  Check balance and pending withdrawal status. A rejected request should automatically refund its reserved amount.
+
+Game does not start
+  Confirm at least the configured minimum number of players joined and that the selection timer has elapsed.
+
+Game state lost after restart
+  Check PostgreSQL connectivity and `/test-db`; inspect recovery logs.
+
+22. PRODUCTION CHECKLIST
+------------------------
+[ ] Legal/regulatory review completed
+[ ] Payment provider rules reviewed
+[ ] Production PostgreSQL configured and backed up
+[ ] Production Redis configured if required
+[ ] BOT_TOKEN stored as a secret
+[ ] ADMIN_PASSWORD stored as a secret
+[ ] ADMIN_SECRET_KEY stored as a secret
+[ ] ADMIN_IDS correct
+[ ] ALLOWED_ORIGINS set to exact HTTPS origin
+[ ] WEBAPP_URL correct
+[ ] Telegram webhook configured
+[ ] `pytest -q` passes
+[ ] Payment test completed
+[ ] Withdrawal test completed
+[ ] 2-player game test completed
+[ ] 50-player load test completed
+[ ] 400-player load test completed before claiming 400-player capacity
+[ ] Database backup/restore test completed
+[ ] Monitoring/logging configured
+[ ] Private beta completed before public launch
+
+23. CHANGE SUMMARY
+------------------
+This production-hardening pass made these major changes:
+
+- Replaced the old JSON wallet with PostgreSQL-only wallet state.
+- Added atomic row-locked balance mutations.
+- Added idempotent transaction references.
+- Added pending deposit requests and admin approval.
+- Added pending withdrawal requests with balance reservation and rejection refunds.
+- Prevented automatic client-side crediting of deposits.
+- Added secure environment-only admin configuration with no hard-coded admin password.
+- Added a canonical production game service.
+- Removed duplicate/competing game engines and wallet implementations.
+- Enforced exactly 400 valid Bingo cards.
+- Corrected Bingo card row/column representation.
+- Made server-side called numbers authoritative.
+- Prevented client-side fake Bingo claims from determining winners.
+- Added server-side simultaneous winner detection.
+- Added idempotent winner payouts and pending payout recovery.
+- Added game restart recovery from PostgreSQL.
+- Added cancellation/refund handling for admin-ended games.
+- Added admin deposit/withdrawal approval endpoints.
+- Fixed admin ban toggling.
+- Removed fake dashboard/game statistics from the main game path.
+- Removed insecure wildcard CORS defaults.
+- Added automated game-engine tests.
+
+END OF RUNBOOK
